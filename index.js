@@ -4,10 +4,12 @@ var compression = require('compression')
 var debug = require('debug')('nowplaying-node');
 var MongoClient = require('mongodb').MongoClient;
 var VERSION = "0.0.1"
-var config = require('./config')
+
 var moment = require('moment')
 
-if (!config)
+try {
+	var config = require('./config')
+} catch (e)
 {
 	console.log("Not configured yet! -- boo! Copy config.js.EXAMPLE to config.js and customise it please!")
 	process.exit()
