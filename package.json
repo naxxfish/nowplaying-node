@@ -1,0 +1,23 @@
+{
+  "name": "nowplaying-node",
+  "version": "0.0.0",
+  "description": "Now playing thing for radio",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/naxxfish/nowplaying-node.git"
+  },
+  "keywords": [
+    "nowplaying",
+    "radio"
+  ],
+  "author": "Chris Roberts",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/naxxfish/nowplaying-node/issues"
+  },
+  "homepage": "https://github.com/naxxfish/nowplaying-node"
+}
