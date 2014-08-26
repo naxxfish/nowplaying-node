@@ -19,5 +19,11 @@
   "bugs": {
     "url": "https://github.com/naxxfish/nowplaying-node/issues"
   },
-  "homepage": "https://github.com/naxxfish/nowplaying-node"
+  "homepage": "https://github.com/naxxfish/nowplaying-node",
+  "dependencies": {
+    "compression": "^1.0.11",
+    "debug": "^1.0.4",
+    "express": "^4.8.5",
+    "mongodb": "^1.4.9"
+  }
 }
