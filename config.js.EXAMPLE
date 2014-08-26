@@ -7,7 +7,8 @@ var config = {
 	},
 	mongo: {
 		connectionString: "mongodb://nowplaying:nowplaying@localhost/nowplaying"
-	}
+	},
+	sessionKeySecret: "12397 this should be a secret"
 }
 
 module.exports = config
