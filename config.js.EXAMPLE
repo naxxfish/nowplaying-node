@@ -1,0 +1,13 @@
+var config = {
+	stationName: "Your Station Name Here",
+	stomp :{
+		host: '127.0.0.1',
+		port: 61336,
+		topic: '/topic/nowplaying'
+	},
+	mongo: {
+		connectionString: "mongodb://nowplaying:nowplaying@localhost/nowplaying"
+	}
+}
+
+module.exports = config
