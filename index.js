@@ -72,6 +72,7 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 			console.log("Data " + data[field])
 			nowplaying[field] = data[field]
 		}
+		delete nowplaying['feedSecret']
 		var np = db.collection('NP')
 		var history = db.collection('HISTORY')
 		nowplaying['timestamp'] = moment().unix()
