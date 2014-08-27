@@ -25,6 +25,11 @@ var nowplaying = {}
 
 MongoClient.connect(config.mongo.connectionString, function (err, db)
 {
+	if (err)
+	{
+		console.error(err)
+		process.exit()
+	}
 	passport.use(new LocalStrategy( function (username, password, done) {
 		process.nextTick(function () {
 			if (password == "hackme")
@@ -57,10 +62,63 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 		}))
 	});
 	
-	app.post('/feed/:clientID', function (req, res) {
-		nowplaying = {'data': req.body, 'source': req.query.clientID}
-		res.end(JSON.stringify({code:200,msg:'OK'}))
+	function feedMe(data, cb) 
+	{	
+		console.log(data)
+		for (var i=0;i<Object.keys(data).length;i++)
+		{
+			var field = Object.keys(data)[i]
+			console.log("Field " + field)
+			console.log("Data " + data[field])
+			nowplaying[field] = data[field]
+		}
+		var np = db.collection('NP')
+		var history = db.collection('HISTORY')
+		nowplaying['timestamp'] = moment().unix()
+		np['type'] = "nowplaying"
+		np.update({'type':'nowplaying'}, nowplaying, {upsert: true}, function (err, doc) {
+			if (err){
+				
+				console.error(err)
+				cb(err)
+				return
+			}
+			cb()
+			console.log("Updated nowplaying")
+		})
+		history.update({}, nowplaying, {upsert: true}, function (err, doc) {
+			if (err)
+			{
+				console.error(err)
+				cb(err)
+				return
+			}
+			cb()
+			console.log("Updated history")
+		})
+		console.log(nowplaying)
+	}
+	
+	app.post('/feed', function (req, res) {
+		if (req.body.feedSecret == config.feedSecret)
+		{
+			feedMe(req.body, function (err){
+			if (err)
+			{
+				res.end(JSON.stringify({code:500,msg:err}))
+			} else {
+				res.end(JSON.stringify({code:200,msg:'OK'}))
+			}
+			})
+			console.log(nowplaying)
+		} else {
+			req.end("{'error':'Not authorised'}")
+		}
 	});
+	
+	app.get('/feed/', function (req, res) {
+		res.render('feed')
+	})
 	
 	app.get('/nowplaying', function (req, res) {
 		res.end(JSON.stringify(nowplaying))
