@@ -62,17 +62,62 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 		}))
 	});
 	
+	function setField(obj, value, path)
+	{
+		if (path.length == 1)
+		{
+			return obj[path[0]] = value
+		} else {
+			var prop = path.shift()
+			if (!obj[prop])
+			{
+				obj[prop] = {}
+			}
+			return setField(obj[prop], value, path)
+		}
+	}
 	function feedMe(data, cb) 
 	{	
 		console.log(data)
+		var candidate = {}
+		delete data['feedSecret']
+
+		
 		for (var i=0;i<Object.keys(data).length;i++)
 		{
 			var field = Object.keys(data)[i]
 			console.log("Field " + field)
 			console.log("Data " + data[field])
-			nowplaying[field] = data[field]
+			if (field.indexOf(".") != -1)
+			{
+				// nested data!
+				var parts = field.split(/\./)
+				console.log(parts)
+				var result = setField(candidate, data[field], parts)
+				console.log(result)
+			} else {
+				candidate[field] = data[field]
+			}
 		}
-		delete nowplaying['feedSecret']
+		if (candidate['setShow'] != "on")
+		{
+			console.log("Not setting show")
+			delete candidate.show
+		}
+		delete candidate['setShow']
+		if (candidate['setTrack'] != "on")
+		{
+			console.log("Not setting track")
+			delete candidate.track
+		}
+		delete candidate['setTrack']
+		// merge/overwrite the current nowplaying object
+		for (var j=0;j<Object.keys(candidate).length;j++)
+		{
+			var prop = Object.keys(candidate)[j]
+			nowplaying[prop] = candidate[prop]
+		}
+		
 		var np = db.collection('NP')
 		var history = db.collection('HISTORY')
 		nowplaying['timestamp'] = moment().unix()
