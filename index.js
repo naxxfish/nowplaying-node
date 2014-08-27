@@ -76,74 +76,114 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 			return setField(obj[prop], value, path)
 		}
 	}
-	function feedMe(data, cb) 
-	{	
-		console.log(data)
-		var candidate = {}
-		delete data['feedSecret']
-
-		
-		for (var i=0;i<Object.keys(data).length;i++)
-		{
-			var field = Object.keys(data)[i]
-			console.log("Field " + field)
-			console.log("Data " + data[field])
-			if (field.indexOf(".") != -1)
-			{
-				// nested data!
-				var parts = field.split(/\./)
-				console.log(parts)
-				var result = setField(candidate, data[field], parts)
-				console.log(result)
-			} else {
-				candidate[field] = data[field]
-			}
-		}
+	
+	function updateNowPlaying(candidate, cb)
+	{
 		if (candidate['setShow'] != "on")
 		{
-			console.log("Not setting show")
+			debug('updateNowPlaying', "Not setting show")
 			delete candidate.show
 		}
 		delete candidate['setShow']
 		if (candidate['setTrack'] != "on")
 		{
-			console.log("Not setting track")
+			debug('updateNowPlaying', "Not setting track")
 			delete candidate.track
 		}
 		delete candidate['setTrack']
+		
+		// enhance the candidate data here
+		
 		// merge/overwrite the current nowplaying object
 		for (var j=0;j<Object.keys(candidate).length;j++)
 		{
 			var prop = Object.keys(candidate)[j]
 			nowplaying[prop] = candidate[prop]
 		}
+		nowplaying['timestamp'] = moment().unix()
 		
 		var np = db.collection('NP')
 		var history = db.collection('HISTORY')
-		nowplaying['timestamp'] = moment().unix()
-		np['type'] = "nowplaying"
-		np.update({'type':'nowplaying'}, nowplaying, {upsert: true}, function (err, doc) {
-			if (err){
-				
-				console.error(err)
-				cb(err)
-				return
-			}
-			cb()
-			console.log("Updated nowplaying")
-		})
-		history.update({}, nowplaying, {upsert: true}, function (err, doc) {
-			if (err)
+		var show = db.collection('SHOWS')
+		var thingsLeftToDo = 2
+		function cbWhenAllDone(cb)
+		{
+			debug('cbWhenAllDone', thingsLeftToDo)
+			thingsLeftToDo--
+			if (thingsLeftToDo == 0)
 			{
-				console.error(err)
-				cb(err)
-				return
+				cb()
 			}
-			cb()
-			console.log("Updated history")
-		})
-		console.log(nowplaying)
+		}
+		if (nowplaying.track)
+		{
+			np.update({}, nowplaying, {upsert: true}, function (err, doc) {
+				debug('NowPlayingDBUpdate', "Updated nowplaying data", doc)
+				if (err){
+					
+					console.error(err)
+					cb(err)
+					return
+				}	
+				cbWhenAllDone(cb)
+			})
+			history.update({}, nowplaying, {upsert: true}, function (err, doc) {
+				debug('HistoryDBUpdate', "Updated nowplaying history", doc)
+				if (err)
+				{
+					console.error(err)
+					cb(err)
+					return
+				}
+				cbWhenAllDone(cb)
+			})
+		}
+		if (nowplaying.show)
+		{
+			show.update({'show.name': nowplaying.show.name}, nowplaying.show, {upsert: true}, function (err, doc) {
+				if (err)
+				{
+					console.error(err)
+					cb(err)
+					return
+				}	
+				cbWhenAllDone(cb)
+			})
+		}
 	}
+	
+	function feedMe(data, cb) 
+	{	
+		console.log(data)
+		var candidate = {}
+		delete data['feedSecret']
+
+		for (var i=0;i<Object.keys(data).length;i++)
+		{
+			var field = Object.keys(data)[i]
+			debug('feedMe',"Field " + field)
+			debug('feedMe', "Data " + data[field])
+			if (data[field] == "")
+			{
+				// skip blanks
+				continue
+			}
+			if (field.indexOf(".") != -1)
+			{
+				// nested data!
+				var parts = field.split(/\./)
+				var result = setField(candidate, data[field], parts)
+				debug('feedMe:dottedFields', result)
+			} else {
+				candidate[field] = data[field]
+			}
+		}
+		updateNowPlaying(candidate, cb)
+	}
+	
+	app.get('/', function (req, res) {
+		res.render('index', nowplaying)
+	})
 	
 	app.post('/feed', function (req, res) {
 		if (req.body.feedSecret == config.feedSecret)
@@ -156,6 +196,7 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 				res.end(JSON.stringify({code:200,msg:'OK'}))
 			}
 			})
+			console.log("Current nowplaying object:")
 			console.log(nowplaying)
 		} else {
 			req.end("{'error':'Not authorised'}")

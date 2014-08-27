@@ -1,0 +1,12 @@
+<% include header %>
+<div class="main-pane">
+<h1>EMFM Now Playing!</h1>
+<% if (typeof(track) != "undefined") { %>
+<p> Currently playing:</p>
+<dl>
+	<dt><%= track.artist %></dt>
+	<dd><%= track.title %></dd>
+</dl>
+<% } %>
+</div>
+<% include footer %>

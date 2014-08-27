@@ -1,38 +1,37 @@
-<form action="/feed" method="post">
-<div>
-<label>secret:</label>
-<input type="text" name="feedSecret"/><br/>
-</div>
-<div>
-<label>Set track data?</label>
-<input type="checkbox" name="setTrack" />
-</div>
-<div>
-<label>artist</label>
-<input type="text" name="track.artist"/>
-</div>
-<div>
-<label>title</label>
-<input type="text" name="track.title"/>
-</div>
-
-<div>
-<label>Set show data?</label>
-<input type="checkbox" name="setShow" />
-</div>
-<div>
-<label>Show Name</label>
-<input type="text" name="show.name"/>
-</div>
-<div>
-<label>Show presenter</label>
-<input type="text" name="show.presenter"/>
-</div>
-<div>
-<label>Show URL</label>
-<input type="text" name="show.url"/>
-</div>
-<div>
-<input type="submit" value="Submit"/>
-</div>
-</form>
+<% include header %>
+<div class="main-pane">
+	<h1>Set Metadata</h1>
+			<form action="/feed" method="post"  class="form-horizontal">
+			<h2>Track</h2>
+			<ul>
+			<li><label for="feedSecret">secret:</label>
+			<input type="text" name="feedSecret"/></li>
+			<li><label for="setTrack">Set track data?</label>
+			><input type="checkbox" name="setTrack" /></li>
+			<li><label for="track.artist">artist</label>
+			<input type="text" name="track.artist"/></li>
+			<li><label for="track.title">title</label>
+			<input type="text" name="track.title"/></li>
+			</ul>
+			<h2>Show</h2>
+			<ul>
+			<li><label for="setShow">Set show data?</label>
+			<input type="checkbox" name="setShow" /></li>
+			<li><label for="show.name">Show Name</label>
+			<input type="text" name="show.name"/></li>
+			<li><label for="show.url">Show URL</label>
+			<input type="text" name="show.url"/></li>
+			</ul>
+			<h3>Presenter</h3>
+			<ul>
+			<li><label for="show.presenter.name">Presenter's Name</label>
+			<input type="text" name="show.presenter.name"/></li>
+			<li><label for="show.presenter.twitter">Presenter's Twitter handle</label>
+			<input type="text" name="show.presenter.twitter"/></li>
+			<li><label for="show.presenter.url">Presenter's Website</label>
+			<input type="text" name="show.presenter.url"/></li>
+			</ul>
+			<input type="submit" value="Submit"/>
+		</form>
+	</div>
+<% include footer %>
