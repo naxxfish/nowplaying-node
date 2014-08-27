@@ -4,7 +4,7 @@ var request = require('request')
 var url = "http://catnap.in:8000/sustainer.mp3"
 var config = require('./config')
 
-icecast.get(url, function (res) {
+icecast.get(config.streamURL, function (res) {
 	console.error(res.headers)
 	res.on('metadata', function (metadata)
 	{
