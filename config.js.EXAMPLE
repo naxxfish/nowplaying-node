@@ -9,7 +9,8 @@ var config = {
 		connectionString: "mongodb://nowplaying:nowplaying@localhost/nowplaying"
 	},
 	sessionKeySecret: "12397 this should be a secret",
-	feedSecret: "This is the secret shared with your sources"
+	feedSecret: "This is the secret shared with your sources",
+	streamURL: "http://pointer/to/your/stream.mp3"
 }
 
 module.exports = config
