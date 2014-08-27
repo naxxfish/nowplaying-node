@@ -7,6 +7,7 @@ var MongoClient = require('mongodb').MongoClient;
 var cookieParser = require('cookie-parser')
 var bodyParser = require('body-parser')
 var VERSION = "0.0.1"
+var mb = require('musicbrainz')
 
 var moment = require('moment')
 var passport = require('passport')
@@ -20,6 +21,7 @@ try {
 	console.log("Not configured yet! -- boo! Copy config.js.EXAMPLE to config.js and customise it please!")
 	process.exit()
 }
+
 
 var nowplaying = {}
 
@@ -76,25 +78,10 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 			return setField(obj[prop], value, path)
 		}
 	}
-	
-	function updateNowPlaying(candidate, cb)
+
+	function mergeNowPlaying(candidate, cb)
 	{
-		if (candidate['setShow'] != "on")
-		{
-			debug('updateNowPlaying', "Not setting show")
-			delete candidate.show
-		}
-		delete candidate['setShow']
-		if (candidate['setTrack'] != "on")
-		{
-			debug('updateNowPlaying', "Not setting track")
-			delete candidate.track
-		}
-		delete candidate['setTrack']
-		
-		// enhance the candidate data here
-		
-		// merge/overwrite the current nowplaying object
+			// merge/overwrite the current nowplaying object
 		for (var j=0;j<Object.keys(candidate).length;j++)
 		{
 			var prop = Object.keys(candidate)[j]
@@ -136,6 +123,66 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 				}
 			})	
 		}
+	}
+	
+	function updateNowPlaying(candidate, cb)
+	{
+		if (candidate['setShow'] != "on")
+		{
+			debug('updateNowPlaying', "Not setting show")
+			delete candidate.show
+		}
+		delete candidate['setShow']
+		if (candidate['setTrack'] != "on")
+		{
+			debug('updateNowPlaying', "Not setting track")
+			delete candidate.track
+		} else {
+			delete candidate['setTrack']
+			if (candidate.track['artist']!= "NA")
+			{
+				mb.searchArtists(candidate['track']['artist'], { } , 
+				function (err, artists){
+					if (err)
+					{
+						debug('musicbrainz error', err)
+						mergeNowPlaying(candidate, cb)
+						return
+					}
+					debug('musicbrainz OK')
+					if (artist = artists.shift())
+					{
+						candidate.track.mb_arid = artist.id
+						candidate.track.artist = artist.name
+						mb.searchRecordings(candidate['track']['title'], { arid: artist.id }, function (err, recordings) {
+							if (err)
+							{
+								debug('mb recording error',err)
+								mergeNowPlaying(candidate,cb)
+								return
+							}
+							var recording = recordings.shift()
+							if (recording)
+							{
+								debug("got a recording")
+								debug(recording)
+								candidate.track.title = recording.title
+								candidate.track.mb_rid = recording.id
+							} else {
+								debug("no recording!")
+							}
+							mergeNowPlaying(candidate, cb)
+						})
+					} else {
+						mergeNowPlaying(candidate, cb)
+					}
+				})
+			} else {
+				mergeNowPlaying(candidate, cb)
+			}
+		}
+		
+
 
 	}
 	
