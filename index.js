@@ -105,51 +105,38 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 		var np = db.collection('NP')
 		var history = db.collection('HISTORY')
 		var show = db.collection('SHOWS')
-		var thingsLeftToDo = 2
-		function cbWhenAllDone(cb)
-		{
-			debug('cbWhenAllDone', thingsLeftToDo)
-			thingsLeftToDo--
-			if (thingsLeftToDo == 0)
-			{
-				cb()
-			}
-		}
+
 		if (nowplaying.track)
 		{
-			np.update({}, nowplaying, {upsert: true}, function (err, doc) {
-				debug('NowPlayingDBUpdate', "Updated nowplaying data", doc)
-				if (err){
-					
-					console.error(err)
-					cb(err)
-					return
-				}	
-				cbWhenAllDone(cb)
-			})
 			history.update({}, nowplaying, {upsert: true}, function (err, doc) {
 				debug('HistoryDBUpdate', "Updated nowplaying history", doc)
 				if (err)
 				{
 					console.error(err)
 					cb(err)
-					return
+				} else {
+					debug("HistoryDBUpdate", "History updated")
 				}
-				cbWhenAllDone(cb)
-			})
-		}
-		if (nowplaying.show)
-		{
-			show.update({'show.name': nowplaying.show.name}, nowplaying.show, {upsert: true}, function (err, doc) {
-				if (err)
+				if (nowplaying.show)
 				{
-					console.error(err)
-					cb(err)
-					return
-				}	
-				cbWhenAllDone(cb)
-			})
+					show.update({'show.name': nowplaying.show.name}, nowplaying.show, {upsert: true}, function (err, doc) {
+						debug('ShowUpdate', "Updated show", doc)
+						if (err)
+						{
+							console.error(err)
+							cb(err)
+						} else {
+							debug("ShowUpdate", "Show was updated")
+							cb()
+						}
+					})
+				} else {
+					debug('HistoryDBUpdate', "not updating show, executing callback")
+					cb()
+				}
+			})	
 		}
+
 	}
 	
 	function feedMe(data, cb) 
@@ -189,17 +176,18 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 		if (req.body.feedSecret == config.feedSecret)
 		{
 			feedMe(req.body, function (err){
-			if (err)
-			{
-				res.end(JSON.stringify({code:500,msg:err}))
-			} else {
-				res.end(JSON.stringify({code:200,msg:'OK'}))
-			}
+				debug("feedMe cb", "fired!" ,err)
+				if (err)
+				{
+					res.end(JSON.stringify({code:500,msg:err}))
+				} else {
+					res.end(JSON.stringify({code:200,msg:'OK'}))
+				}
 			})
 			console.log("Current nowplaying object:")
 			console.log(nowplaying)
 		} else {
-			req.end("{'error':'Not authorised'}")
+			res.end("{'error':'Not authorised'}")
 		}
 	});
 	
