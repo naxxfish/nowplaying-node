@@ -7,6 +7,12 @@
 	<dt><%= track.artist %></dt>
 	<dd><%= track.title %></dd>
 </dl>
+<% if (typeof(show) != "undefined") { %>
+<p>On <%= show.name %> - with <%= show.presenter.name %></p>
+<% if (typeof(show.presenter.twitter) != "undefined) { %>
+<a href="https://twitter.com/<%= show.presenter.twitter %>">Their Twitter</a>
+<% } //twitter %>
+<% } %>
 <% } %>
 </div>
 <% include footer %>
