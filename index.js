@@ -2,13 +2,15 @@ var express = require('express');
 var app = express();
 var compression = require('compression')
 var flash = require('connect-flash')
+var request = require('request')
 var debug = require('debug')('nowplaying-node');
 var MongoClient = require('mongodb').MongoClient;
 var cookieParser = require('cookie-parser')
 var bodyParser = require('body-parser')
 var VERSION = "0.0.1"
 var mb = require('musicbrainz')
-
+var NB = require('nodebrainz')
+var nb = new NB({userAgent: 'NodeNowPlaying/0.0.1 ( http://github.com/naxxfish/nowplaying-node )'})
 var moment = require('moment')
 var passport = require('passport')
 var session = require('cookie-session')
@@ -81,21 +83,55 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 
 	function mergeNowPlaying(candidate, cb)
 	{
-			// merge/overwrite the current nowplaying object
+		// merge/overwrite the current nowplaying object
 		for (var j=0;j<Object.keys(candidate).length;j++)
 		{
 			var prop = Object.keys(candidate)[j]
 			nowplaying[prop] = candidate[prop]
+		}
+		if (nowplaying._locals)
+		{
+			delete nowplaying['_locals']
 		}
 		nowplaying['timestamp'] = moment().unix()
 		
 		var np = db.collection('NP')
 		var history = db.collection('HISTORY')
 		var show = db.collection('SHOWS')
+		debug('going to update local metadata')
+		try {
+			if (nowplaying.track && (nowplaying.track.title || nowplaying.track.artist))
+			{
+				trackParts = "?"
+				for (var n=0;n<Object.keys(nowplaying.track).length;n++)
+				{
+					var field = Object.keys(nowplaying.track)[n]
+					var value = nowplaying.track[field]
+					trackParts +=  encodeURIComponent(field) + "=" + encodeURIComponent(value) + "&"
+				}
+				debug('updateMeta', trackParts)
+				request({method: "GET", uri: "http://localhost:7000/setmeta" + trackParts}, function (error, response, body) {
+					console.log(body)
+				})
+			} else {
+				if (nowplaying.show)
+				{
+					request.get("http://localhost:7000/setmeta?title="+ encodeURIComponent(nowplaying.show.name)) // set it to blank if we've got no track
+				} else {
+					request.get("http://localhost:7000/setmeta?title=EMFM") // set it to blank if we've got no track
 
-		if (nowplaying.track)
+				}
+			}
+		} catch (e)
 		{
-			history.update({}, nowplaying, {upsert: true}, function (err, doc) {
+			console.error("Couldn't update local metadata")
+		}
+		if (nowplaying.track && nowplaying.track.title)
+		{
+			var track_history = nowplaying.track
+			track_history.type = "track"
+			track_history.timestamp = moment().unix()
+			history.insert( track_history, function (err, doc) {
 				debug('HistoryDBUpdate', "Updated nowplaying history", doc)
 				if (err)
 				{
@@ -104,25 +140,30 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 				} else {
 					debug("HistoryDBUpdate", "History updated")
 				}
-				if (nowplaying.show)
-				{
-					show.update({'show.name': nowplaying.show.name}, nowplaying.show, {upsert: true}, function (err, doc) {
-						debug('ShowUpdate', "Updated show", doc)
-						if (err)
-						{
-							console.error(err)
-							cb(err)
-						} else {
-							debug("ShowUpdate", "Show was updated")
-							cb()
-						}
-					})
-				} else {
-					debug('HistoryDBUpdate', "not updating show, executing callback")
-					cb()
-				}
 			})	
 		}
+		if (nowplaying.show)
+		{
+			var show_history = nowplaying.show
+			show_history.type = "show"
+			show_history.timestamp = moment().unix()
+			debug('merge', 'Logging show', show_history)
+			show.update({'name': show_history.name, 'type': 'show'}, show_history, {upsert: true}, function (err, doc) {
+				debug('ShowUpdate', "Updated show", doc)
+				if (err)
+				{
+					console.error(err)
+					cb(err)
+				} else {
+					debug("ShowUpdate", "Show was updated")
+					cb()
+				}
+			})
+		} else {
+			debug('HistoryDBUpdate', "not updating show, executing callback")
+			cb()
+		}
+
 	}
 	
 	function updateNowPlaying(candidate, cb)
@@ -137,49 +178,86 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 		{
 			debug('updateNowPlaying', "Not setting track")
 			delete candidate.track
+			mergeNowPlaying(candidate, cb)
+			return
 		} else {
 			delete candidate['setTrack']
-			if (candidate.track['artist']!= "NA")
+			if (candidate.track && candidate.track['artist']!= "NA" && candidate.track.artist != "undefined")
 			{
-				mb.searchArtists(candidate['track']['artist'], { } , 
+				try {
+				nb.search('artist', {artist: candidate['track']['artist']} , 
 				function (err, artists){
-					if (err)
+					console.log(artists)
+					if (err )
 					{
 						debug('musicbrainz error', err)
 						mergeNowPlaying(candidate, cb)
 						return
 					}
-					debug('musicbrainz OK')
-					if (artist = artists.shift())
+					if (artists.count == 0)
 					{
-						candidate.track.mb_arid = artist.id
-						candidate.track.artist = artist.name
-						mb.searchRecordings(candidate['track']['title'], { arid: artist.id }, function (err, recordings) {
-							if (err)
-							{
-								debug('mb recording error',err)
-								mergeNowPlaying(candidate,cb)
-								return
-							}
-							var recording = recordings.shift()
-							if (recording)
-							{
-								debug("got a recording")
-								debug(recording)
-								candidate.track.title = recording.title
-								candidate.track.mb_rid = recording.id
-							} else {
-								debug("no recording!")
-							}
-							mergeNowPlaying(candidate, cb)
-						})
+						debug('musicbrainz', 'no artist match')
+						mergeNowPlaying(candidate, cb)
+						return
+					}
+					debug('musicbrainz OK')
+					if (artist = artists.artist.shift())
+					{
+						debug('musicbrainz artist', artist)
+						if (artist.score > 75)
+						{
+							debug('musicbrainz artist', 'Got a score of ' + artist.score + ', so using this data!')
+							candidate.track.mb_arid = artist.id
+							candidate.track.artist = artist.name
+							nb.search('release',{'arid': candidate.track.mb_arid, release: candidate['track']['title'] }, function (err, releases) {
+								debug('mb recordings', releases)
+								if (err)
+								{
+									debug('mb recording error',err)
+									mergeNowPlaying(candidate,cb)
+									return
+								}
+								if (releases.count == 0)
+								{
+									debug('muscibrainz', 'no matching recording')
+									mergeNowPlaying(candidate, cb)
+									return
+								}
+								var release = releases.releases.shift()
+								if (release)
+								{
+									debug("musicbrainz","got a recording!")
+									debug(release)
+									if (release.score > 90)
+									{
+										debug("musicbrainz", "recording scores highly!")
+										candidate.track.title = release.title
+										candidate.track.mb_rid = release.id
+									} else {
+										debug("musicbrainz", "recording doesn't score high enough")
+									}
+								} else {
+									debug("no recording!")
+								}
+								mergeNowPlaying(candidate, cb)
+							})
+						} else {
+							debug('musicbrainz artist', "Got a score of " + artist.score + " % - not good enough, not using")
+							mergeNowPlaying(candidate,cb)
+						}
 					} else {
 						mergeNowPlaying(candidate, cb)
 					}
 				})
+				} catch (e)
+				{
+					console.log(error)
+				}
 			} else {
+				candidate.track = {}
 				mergeNowPlaying(candidate, cb)
 			}
+			
 		}
 		
 
@@ -188,6 +266,7 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 	
 	function feedMe(data, cb) 
 	{	
+		debug('feedme',data)
 		console.log(data)
 		var candidate = {}
 		delete data['feedSecret']
@@ -216,6 +295,7 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 	}
 	
 	app.get('/', function (req, res) {
+		debug('app.get /')
 		res.render('index', nowplaying)
 	})
 	
@@ -243,30 +323,26 @@ MongoClient.connect(config.mongo.connectionString, function (err, db)
 	})
 	
 	app.get('/nowplaying', function (req, res) {
+		debug('app.get /nowplaying')
 		res.end(JSON.stringify(nowplaying))
 	});
 	
-	app.get('/admin/login', function (req, res)
+	app.get('/history', function (req, res) {
+		getHistory(res, 0)
+	})
+	function getHistory(res, since)
 	{
-		res.render('login', { user: req.user, message: req.flash('error') });
-	});
-	
-	app.post('/admin/login', 
-		passport.authenticate('local', { failureRedirect: '/admin/login', failureFlash: true }),
-		function (req, res)
-		{
-			res.redirect('/admin')
-		}
-	);
-	
-	app.get('/admin/logout', function(req, res){
-		req.logout();
-		res.redirect('/admin/login');
-	});
-	
-	app.get('/admin', ensureAuthenticated, function (req, res) {
-		res.end("Heyo!")
-	});
+		debug('app.get /history', 'since', since)
+		db.collection('HISTORY').find({'timestamp': {$gt : since}}).toArray(function (err, docs) {
+			debug('get history', docs)
+			res.end(JSON.stringify(docs))
+		})
+	}
+
+	app.get('/history/:since', function (req, res) {
+		since = parseInt(req.params.since)
+		getHistory(res, since)
+	})
 	
 	var server = app.listen(3000, function () {
 		console.log("Listening on port %d", server.address().port)
